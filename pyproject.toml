@@ -3,7 +3,7 @@ requires = ["flit_core >=2,<4"]
 build-backend = "flit_core.buildapi"
 
 [tool.flit.metadata]
-module = "dcrf-asyncapi"
+module = "dcrf_asyncapi"
 author = "Viacheslav Krachkov"
 author-email = "vskrachkov@gmail.com"
 home-page = "https://github.com/vskrachkov/dcrf-asyncapi"
