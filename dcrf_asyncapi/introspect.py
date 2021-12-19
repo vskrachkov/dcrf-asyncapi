@@ -8,21 +8,38 @@ from djangochannelsrestframework.generics import GenericAsyncAPIConsumer
 from rest_framework.schemas.openapi import AutoSchema
 from rest_framework.serializers import BaseSerializer
 
-from . import asyncapi
-from .action_docs import ActionDocs
+from dcrf_asyncapi import asyncapi
+from dcrf_asyncapi.action_docs import ActionDocs
 
 log = logging.getLogger(__name__)
 
 
-def introspect_consumer(consumer: Any) -> asyncapi.Channels:
+def introspect_application(
+    app: Union[
+        ProtocolTypeRouter,
+        URLRouter,
+        Type[GenericAsyncAPIConsumer],
+        Type[AsyncJsonWebsocketConsumer],
+    ]
+) -> asyncapi.Channels:
+    if isinstance(app, ProtocolTypeRouter):
+        return _handle__ProtocolTypeRouter(app)
+    if isinstance(app, URLRouter):
+        return _handle__URLRouter(app)
+    if issubclass(app, (GenericAsyncAPIConsumer, AsyncJsonWebsocketConsumer)):
+        return _introspect_consumer(app)
+    return {}
+
+
+def _introspect_consumer(consumer: Any) -> asyncapi.Channels:
     res: asyncapi.Channels = {}
 
     if hasattr(consumer, "consumer_class"):
-        return introspect_consumer(consumer.consumer_class)
+        return _introspect_consumer(consumer.consumer_class)
 
     if hasattr(consumer, "applications"):
         for stream, consumer_class in consumer.applications.items():
-            res = res | introspect_consumer(consumer_class)
+            res = res | _introspect_consumer(consumer_class)
         return res
 
     if hasattr(consumer, "available_actions"):
@@ -34,16 +51,16 @@ def introspect_consumer(consumer: Any) -> asyncapi.Channels:
                     log.warning("docs must be an instance of ActionDocs")
                 res[action_name] = {}
                 res[action_name]["description"] = docs.description
-                res[action_name]["publish"] = to_message([docs.publish])
+                res[action_name]["publish"] = _to_message([docs.publish])
                 if docs.subscribe:
-                    res[action_name]["subscribe"] = to_message(docs.subscribe)
+                    res[action_name]["subscribe"] = _to_message(docs.subscribe)
             else:
                 log.warning(f"no docs for action: {action_name}")
 
     return res
 
 
-def to_message(serializers: Iterable[BaseSerializer]) -> dict:
+def _to_message(serializers: Iterable[BaseSerializer]) -> dict:
     return {
         "message": {
             "oneOf": [
@@ -57,21 +74,21 @@ def to_message(serializers: Iterable[BaseSerializer]) -> dict:
     }
 
 
-def get_root_app(app: ASGI2Protocol) -> ASGI2Protocol:
+def _get_root_app(app: ASGI2Protocol) -> ASGI2Protocol:
     while hasattr(app, "inner"):
         app = getattr(app, "inner")
         continue
     return app
 
 
-def handle__ProtocolTypeRouter(app: ProtocolTypeRouter) -> asyncapi.Channels:
+def _handle__ProtocolTypeRouter(app: ProtocolTypeRouter) -> asyncapi.Channels:
     if ws := app.application_mapping.get("websocket"):
-        root_app = get_root_app(ws)
+        root_app = _get_root_app(ws)
         return introspect_application(root_app)
     return {}
 
 
-def handle__URLRouter(app: URLRouter) -> asyncapi.Channels:
+def _handle__URLRouter(app: URLRouter) -> asyncapi.Channels:
     res: asyncapi.Channels = {}
     for route in app.routes:
         if hasattr(route.callback, "consumer_class"):
@@ -80,20 +97,3 @@ def handle__URLRouter(app: URLRouter) -> asyncapi.Channels:
         else:
             res = res | introspect_application(route)
     return res
-
-
-def introspect_application(
-    app: Union[
-        ProtocolTypeRouter,
-        URLRouter,
-        Type[GenericAsyncAPIConsumer],
-        Type[AsyncJsonWebsocketConsumer],
-    ]
-) -> asyncapi.Channels:
-    if isinstance(app, ProtocolTypeRouter):
-        return handle__ProtocolTypeRouter(app)
-    if isinstance(app, URLRouter):
-        return handle__URLRouter(app)
-    if issubclass(app, (GenericAsyncAPIConsumer, AsyncJsonWebsocketConsumer)):
-        return introspect_consumer(app)
-    return {}
