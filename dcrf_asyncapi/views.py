@@ -13,7 +13,7 @@ def asyncapi_docs(request: Request) -> HttpResponse:
     app = import_string(settings.ASGI_APPLICATION)
     return render(
         request,
-        "dcrf_docs/index.html",
+        "dcrf_asyncapi/index.html",
         dict(
             schema=asyncapi.cleanup_none(
                 dataclasses.asdict(

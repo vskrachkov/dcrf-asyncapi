@@ -8,8 +8,8 @@ from djangochannelsrestframework.generics import GenericAsyncAPIConsumer
 from rest_framework.schemas.openapi import AutoSchema
 from rest_framework.serializers import BaseSerializer
 
-from dcrf_docs import asyncapi
-from dcrf_docs.action_docs import ActionDocs
+from . import asyncapi
+from .action_docs import ActionDocs
 
 log = logging.getLogger(__name__)
 
